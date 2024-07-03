@@ -1,5 +1,4 @@
 import os
-from google.cloud import firestore
 import requests
 import re
 from urllib.parse import unquote
@@ -36,13 +35,13 @@ def get_coordinates(address):
         response = requests.get(endpoint)
         data = response.json()
 
-        if data["status"] == "OK":
+        if response.status_code == 200 and data.get("status") == "OK":
             location = data["results"][0]["geometry"]["location"]
             lat = location["lat"]
             lng = location["lng"]
             return lat, lng
         else:
-            print(f"Geocoding failed with status: {data['status']}")
+            print(f"Geocoding failed with status: {data.get('status')}")
             return None, None
     except Exception as e:
         print(f"Error geocoding: {e}")
@@ -53,38 +52,46 @@ def get_coordinates(address):
 def get_google_maps_link():
     location_link = request.args.get("location_link")
 
-    if location_link:
+    if not location_link:
+        return jsonify({"error": "No location link found in request parameters."}), 400
+
+    try:
         response = requests.head(location_link, allow_redirects=True)
         long_url = response.url
         address = get_address_from_google_maps_url(long_url)
 
-        if address:
-            latitude, longitude = get_coordinates(address)
+        if not address:
+            return jsonify({"error": "Failed to extract address from URL."}), 400
 
-            if latitude is not None and longitude is not None:
-                google_maps_link = (
-                    f"https://www.google.com/maps?q={latitude},{longitude}"
-                )
-                return jsonify(
+        latitude, longitude = get_coordinates(address)
+
+        if latitude is not None and longitude is not None:
+            google_maps_link = f"https://www.google.com/maps?q={latitude},{longitude}"
+            return (
+                jsonify(
                     {
                         "co-ordinates": {"latitude": latitude, "longitude": longitude},
                         "google_maps_link": google_maps_link,
                     }
-                )
-            else:
-                return (
-                    jsonify(
-                        {
-                            "error": "Failed to retrieve coordinates for the address extracted from URL."
-                        }
-                    ),
-                    400,
-                )
+                ),
+                200,
+            )
         else:
-            return jsonify({"error": "Failed to extract address from URL."}), 400
-    else:
-        return jsonify({"error": "No location link found in request parameters."}), 400
+            return (
+                jsonify(
+                    {
+                        "error": "Failed to retrieve coordinates for the address extracted from URL."
+                    }
+                ),
+                400,
+            )
+    except Exception as e:
+        print(f"Error processing request: {e}")
+        return (
+            jsonify({"error": "An error occurred while processing the request."}),
+            500,
+        )
 
 
 if __name__ == "__main__":
-    app.run(debug=False)
+    app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
