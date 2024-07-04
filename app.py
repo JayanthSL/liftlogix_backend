@@ -9,18 +9,23 @@ app = Flask(__name__)
 
 
 def get_coordinates_from_short_url(short_url):
-    time.sleep(5)
-    response = requests.head(short_url, allow_redirects=True)
-    time.sleep(2)
-    long_url = response.url
-    print(long_url)
-    match = re.search(r"\/(-?\d+\.\d+),\+(-?\d+\.\d+)", unquote(long_url))
-    # time.sleep(2)
-    if match:
-        lat = float(match.group(1))
-        lon = float(match.group(2))
-        return lat, lon
-    else:
+    try:
+        time.sleep(5)
+        response = requests.head(short_url, allow_redirects=True)
+        time.sleep(2)
+        long_url = response.url
+        print(f"Resolved long URL from short URL: {long_url}")
+        match = re.search(r"\/(-?\d+\.\d+),\+(-?\d+\.\d+)", unquote(long_url))
+        if match:
+            lat = float(match.group(1))
+            lon = float(match.group(2))
+            print(f"Extracted coordinates from long URL: {lat}, {lon}")
+            return lat, lon
+        else:
+            print("Coordinates not found in the long URL.")
+            return None, None
+    except Exception as e:
+        print(f"Error resolving short URL: {e}")
         return None, None
 
 
@@ -28,13 +33,13 @@ def get_address_from_google_maps_url(long_url):
     try:
         match = re.search(r"@(-?\d+\.\d+),(-?\d+\.\d+)", unquote(long_url))
         if match:
-            coordinates = match.group(0)
             address = (
                 long_url.split("/@")[0]
                 .replace("https://www.google.com/maps/place/", "")
                 .replace(",", " ")
                 .replace("+", " ")
             )
+            print(f"Extracted address: {address}")
             return address
         else:
             print("Coordinates not found in the URL.")
@@ -49,8 +54,11 @@ def get_coordinates(address):
     endpoint = f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key={api_key}"
 
     try:
+        print(f"Geocoding request URL: {endpoint}")
         response = requests.get(endpoint)
         data = response.json()
+
+        print(f"Geocoding response: {data}")
 
         if response.status_code == 200 and data.get("status") == "OK":
             location = data["results"][0]["geometry"]["location"]
@@ -58,7 +66,9 @@ def get_coordinates(address):
             lng = location["lng"]
             return lat, lng
         else:
-            print(f"Geocoding failed with status: {data.get('status')}")
+            print(
+                f"Geocoding failed with status: {data.get('status')}, error_message: {data.get('error_message')}"
+            )
             return None, None
     except Exception as e:
         print(f"Error geocoding: {e}")
@@ -75,24 +85,31 @@ def get_google_maps_link():
     try:
         response = requests.head(location_link, allow_redirects=True)
         long_url = response.url
+        print(f"Resolved long URL: {long_url}")
         address = get_address_from_google_maps_url(long_url)
 
-        if not address:
-            latitude, longitude = get_coordinates_from_short_url(location_link)
+        if address:
+            latitude, longitude = get_coordinates(address)
+            if latitude is not None and longitude is not None:
+                google_maps_link = (
+                    f"https://www.google.com/maps?q={latitude},{longitude}"
+                )
+                return (
+                    jsonify(
+                        {
+                            "co-ordinates": {
+                                "latitude": latitude,
+                                "longitude": longitude,
+                            },
+                            "google_maps_link": google_maps_link,
+                        }
+                    ),
+                    200,
+                )
+            else:
+                print(f"Geocoding failed for extracted address: {address}")
 
-            google_maps_link = f"https://www.google.com/maps?q={latitude},{longitude}"
-            return (
-                jsonify(
-                    {
-                        "co-ordinates": {"latitude": latitude, "longitude": longitude},
-                        "google_maps_link": google_maps_link,
-                    }
-                ),
-                200,
-            )
-
-        latitude, longitude = get_coordinates(address)
-
+        latitude, longitude = get_coordinates_from_short_url(location_link)
         if latitude is not None and longitude is not None:
             google_maps_link = f"https://www.google.com/maps?q={latitude},{longitude}"
             return (
@@ -106,11 +123,7 @@ def get_google_maps_link():
             )
         else:
             return (
-                jsonify(
-                    {
-                        "error": "Failed to retrieve coordinates for the address extracted from URL."
-                    }
-                ),
+                jsonify({"error": "Failed to extract coordinates from URL."}),
                 400,
             )
     except Exception as e:
