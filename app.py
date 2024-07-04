@@ -1,10 +1,27 @@
 import os
+import time
 import requests
 import re
 from urllib.parse import unquote
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
+
+
+def get_coordinates_from_short_url(short_url):
+    time.sleep(5)
+    response = requests.head(short_url, allow_redirects=True)
+    time.sleep(2)
+    long_url = response.url
+    print(long_url)
+    match = re.search(r"\/(-?\d+\.\d+),\+(-?\d+\.\d+)", unquote(long_url))
+    # time.sleep(2)
+    if match:
+        lat = float(match.group(1))
+        lon = float(match.group(2))
+        return lat, lon
+    else:
+        return None, None
 
 
 def get_address_from_google_maps_url(long_url):
@@ -61,7 +78,18 @@ def get_google_maps_link():
         address = get_address_from_google_maps_url(long_url)
 
         if not address:
-            return jsonify({"error": "Failed to extract address from URL."}), 400
+            latitude, longitude = get_coordinates_from_short_url(location_link)
+
+            google_maps_link = f"https://www.google.com/maps?q={latitude},{longitude}"
+            return (
+                jsonify(
+                    {
+                        "co-ordinates": {"latitude": latitude, "longitude": longitude},
+                        "google_maps_link": google_maps_link,
+                    }
+                ),
+                200,
+            )
 
         latitude, longitude = get_coordinates(address)
 
