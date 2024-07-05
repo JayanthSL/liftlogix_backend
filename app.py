@@ -31,21 +31,18 @@ def get_coordinates_from_short_url(short_url):
 
 def get_address_from_google_maps_url(long_url):
     try:
-        match = re.search(r"@(-?\d+\.\d+),(-?\d+\.\d+)", unquote(long_url))
-        if match:
-            address = (
-                long_url.split("/@")[0]
-                .replace("https://www.google.com/maps/place/", "")
-                .replace(",", " ")
-                .replace("+", " ")
-            )
+        if "https://www.google.com/maps/place/" in long_url:
+            address_part = long_url.split("https://www.google.com/maps/place/")[
+                1
+            ].split("/")[0]
+            address = unquote(address_part).replace("+", " ")
             print(f"Extracted address: {address}")
             return address
         else:
-            print("Coordinates not found in the URL.")
+            print("Address not found in the URL.")
             return None
     except Exception as e:
-        print(f"Error extracting address from URL: {e}")
+        print(f"An error occurred: {e}")
         return None
 
 
