@@ -1,21 +1,12 @@
-import os
-from dotenv import load_dotenv
-from flask import Flask, json, jsonify, request
+from flask import Flask, jsonify, request
 
 from google.cloud import firestore
 
 app = Flask(__name__)
 
-load_dotenv()
 
-service_account_key_json = os.getenv("FIREBASE_SERVICE_ACCOUNT")
-
-if not service_account_key_json:
-    raise ValueError("The FIREBASE_SERVICE_ACCOUNT environment variable is not set.")
-
-service_account_info = json.loads(service_account_key_json)
-
-db = firestore.Client.from_service_account_info(service_account_info)
+service_account_key = "./lift-logix-677fd-275ba7817d49.json"
+db = firestore.Client.from_service_account_json(service_account_key)
 
 
 @app.route("/api/coordinates", methods=["GET"])
